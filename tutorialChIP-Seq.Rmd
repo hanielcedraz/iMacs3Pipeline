@@ -1,0 +1,166 @@
+---
+title: "Steps to analyse ChIP-Seq data."
+author: "Haniel Cedraz"
+date: "Last compiled on `r format(Sys.time(), '%d %B, %Y')`"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+        toc_depth: 4
+        theme: united
+        highlight: tango
+---
+
+```{=html}
+<style type="text/css">
+
+h1.title {
+  font-size: 38px;
+  color: DarkBlack;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlack;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+</style>
+```
+# Step 1. - Mapping and Processing
+
+Using BWA-mem (<http://bio-bwa.sourceforge.net>) to aligned the fastq files against the pig reference genome (Sscrofa11.1).
+
+## First we need to index the reference genome
+
+        $ bwa index pig_reference_genome/Sus_scrofa.Sscrofa11.1.dna.toplevel.fa
+
+## Creating a directory for the output generated from BWA
+
+        $ mkdir 01-BWA_mapped
+
+## Alingning reads against the pig reference genome using bwa-mem
+
+### Single-end files
+
+        $ for i in $(ls 00-Fastq/); do bwa mem -t 12 ../pig_reference_genome/Sus_scrofa.Sscrofa11.1.dna.toplevel.fa 00-Fastq/$i > 01-BWA_mapped/$i"_unsorted_aligned.sam"; done
+
+### Paired-end files
+
+        $ for i in $(ls 00-Fastq/*R1*); do a=`basename $i | cut -d"_" -f1,2`; bwa mem -t 12 ../pig_reference_genome/Sus_scrofa.Sscrofa11.1.dna.toplevel.fa $i 00-Fastq/$a"_L002_R2_001.fastq.gz" > 01-BWA_mapped/$a"_unsorted_aligned.sam"; done
+
+<br>
+
+When BWA is finished, the files need to be processed. This will be done using samtools.
+
+## Convert *.sam file into* .bam format
+
+        $ for i in $(ls 01-BWA_mapped/); do a=`basename $i | cut -d"." -f1`; samtools view -@ 12 -bS 01-BWA_mapped/$i > 01-BWA_mapped/$a".unsorted_aligned.bam"; done
+
+## Removing sam file to save space
+
+        $ rm 01-BWA_mapped/*.sam
+
+## Sort the alignment file
+
+        $ for i in $(ls 01-BWA_mapped/); do a=`basename $i | cut -d"." -f1`; samtools sort -@ 12 01-BWA_mapped/$i > 01-BWA_mapped/$a"_sorted_aligned.bam"; done
+
+## Removing unsorted bam files to save space
+
+        $ rm 01-BWA_mapped/*unsorted_aligned.bam
+
+## Remove PCR duplicates
+
+        $ for i in $(ls 01-BWA_mapped/*_sorted_aligned.bam); do a=`basename $i | cut -d"." -f1`; samtools rmdup $i 01-BWA_mapped/$a"_RD.bam"; done
+
+## only keep reads that are uniquely aligned aganist the genome
+
+        $ for i in $(ls 01-BWA_mapped/*_sorted_aligned_RD.bam); do a=`basename $i | cut -d"." -f1`; samtools view -@ 12 -b -q 10 $i > 01-BWA_mapped/$a"_uniq.bam"; done
+
+## Indexing the alignment
+
+        $ for i in $(ls 01-BWA_mapped/*_sorted_aligned_RD_uniq.bam); do samtools index -@ 12 $i; done
+
+# Step 2. - Peak calling
+
+After mapping reads to the genome, macs3 - peak calling is used to identify regions of ChIp enrichment.
+
+## Installing MACS3
+
+### Prepare a virtual Python environment and installing macs3
+
+It is strongly recommended installing MACS program in a virtual environment, so that you have full control of your installation and won't mess up with your system libraries.
+
+A simple way to create a virtual environment of Python3 is:
+
+### Creating and activating python enviroment
+
+        $ python3 -m venv MyPythonEnv/
+        $ source MyPythonEnv/bin/activate
+
+### Clonning git repository and installing MACS3
+
+        $ git clone https://github.com/macs3-project/MACS.git
+        $ cd MACS
+        $ python setup.py install
+        $ cd ../
+
+### Creating a soft link
+
+        $ ln -s MACS/bin/macs3
+
+## Running macs2
+
+The program MACS2 (<https://github.com/taoliu/MACS>) is probably the most used program to call ChIP-seq peaks (regions where there is an enrichment of your ChIP-seq mark).
+
+### Project: <a href="https://www.ebi.ac.uk/ena/browser/view/PRJEB28147">PRPRJEB28147 ENA database</a>
+
+This project is divided in two parts, then need to be analyzed separated.
+
+-   Part 1. me3 treatment;
+-   Part 2. ac treatment;
+
+The command line for macs2 need to be done using control and treatment parameters
+
+#### 
+
+        $ for i in me3 ac; do mkdir 01-BWA_mapped"_$i"; done
+
+### -Part 1. me3 treatment;
+
+#### Calling narrow peaks
+
+        $ mkdir 02-callpeaks_narrow_me3_results
+
+        $ for i in $(ls 01-BWA_mapped_me3/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --outdir 02-callpeaks_macs2_narrow_me3_results -n $a"_narrow" -B -q 0.01 --nomodel --extsize 147 -B -q 0.01; done
+
+#### Calling broad peaks
+
+        $ mkdir 02-callpeaks_macs2_broad_me3_results
+
+
+        $ macs3 callpeak -t ChIP.bam -c Control.bam -f BAM -g hs -n test -B -q 0.01
+
+
+
+        $ for i in $(ls 01-BWA_mapped_me3/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --broad --outdir 02-callpeaks_macs2_broad_me3_results -n $a"_broad" --broad-cutoff 0.1 --nomodel --extsize 147 -B -q 0.01; done
+
+### -Part 2. ac treatment;
+
+#### Calling narrow peaks
+
+        $ mkdir 02-callpeaks_macs2_narrow_ac_results
+
+        $ for i in $(ls 01-BWA_mapped_ac/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --outdir 02-callpeaks_macs2_narrow_ac_results -n $a"_narrow" -B -q 0.01 --nomodel --extsize 147 -B -q 0.01; done
+
+#### Calling broad peaks
+
+        $ mkdir 02-callpeaks_macs2_broad_ac_results
+
+        $ for i in $(ls 01-BWA_mapped_ac/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --broad --outdir 02-callpeaks_macs2_broad_ac_results -n $a"_broad" --broad-cutoff 0.1 --nomodel --extsize 147 -B -q 0.01; done
