@@ -117,50 +117,26 @@ A simple way to create a virtual environment of Python3 is:
 
 ## Running macs2
 
-The program MACS2 (<https://github.com/taoliu/MACS>) is probably the most used program to call ChIP-seq peaks (regions where there is an enrichment of your ChIP-seq mark).
+The program MACS3 (<https://github.com/taoliu/MACS>) is probably the most used program to call ChIP-seq peaks (regions where there is an enrichment of your ChIP-seq mark).
 
-### Project: <a href="https://www.ebi.ac.uk/ena/browser/view/PRJEB28147">PRPRJEB28147 ENA database</a>
+<!-- ### Project: <a href="https://www.ebi.ac.uk/ena/browser/view/PRJEB28147">PRPRJEB28147 ENA database</a> -->
 
-This project is divided in two parts, then need to be analyzed separated.
+<!-- This project is divided in two parts, then need to be analyzed separated. -->
 
--   Part 1. me3 treatment;
--   Part 2. ac treatment;
+<!-- -   Part 1. me3 treatment; -->
+<!-- -   Part 2. ac treatment; -->
 
-The command line for macs2 need to be done using control and treatment parameters
+The command line for macs3 need to be done using control and treatment parameters
 
 #### 
 
         $ for i in me3 ac; do mkdir 01-BWA_mapped"_$i"; done
 
-### -Part 1. me3 treatment;
+### -Part 1. Peak calling on TF ChIP-seq:
 
-#### Calling narrow peaks
-
-        $ mkdir 02-callpeaks_narrow_me3_results
-
-        $ for i in $(ls 01-BWA_mapped_me3/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --outdir 02-callpeaks_macs2_narrow_me3_results -n $a"_narrow" -B -q 0.01 --nomodel --extsize 147 -B -q 0.01; done
-
-#### Calling broad peaks
-
-        $ mkdir 02-callpeaks_macs2_broad_me3_results
+        $ macs3Pipeline.R -i 01-BWA_mapped -s 3
 
 
-        $ macs3 callpeak -t ChIP.bam -c Control.bam -f BAM -g hs -n test -B -q 0.01
+### -Part 2. Peak calling on Histone Mark ChIP-seq:
 
-
-
-        $ for i in $(ls 01-BWA_mapped_me3/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --broad --outdir 02-callpeaks_macs2_broad_me3_results -n $a"_broad" --broad-cutoff 0.1 --nomodel --extsize 147 -B -q 0.01; done
-
-### -Part 2. ac treatment;
-
-#### Calling narrow peaks
-
-        $ mkdir 02-callpeaks_macs2_narrow_ac_results
-
-        $ for i in $(ls 01-BWA_mapped_ac/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --outdir 02-callpeaks_macs2_narrow_ac_results -n $a"_narrow" -B -q 0.01 --nomodel --extsize 147 -B -q 0.01; done
-
-#### Calling broad peaks
-
-        $ mkdir 02-callpeaks_macs2_broad_ac_results
-
-        $ for i in $(ls 01-BWA_mapped_ac/*_RD_uniq.bam); do a=`basename $i | cut -d"." -f1`; ./macs2 callpeak -t $i -f BAM -g 8.1e7 --broad --outdir 02-callpeaks_macs2_broad_ac_results -n $a"_broad" --broad-cutoff 0.1 --nomodel --extsize 147 -B -q 0.01; done
+        $ macs3Pipeline.R -i 01-BWA_mapped --broad -s 3
